@@ -75,9 +75,10 @@ ui <- dashboardPage(
   
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Overview", tabName = "overview", icon = icon("chart-line")),
-      menuItem("Geography", tabName = "geo", icon = icon("map-marked-alt")),
-      menuItem("Data", tabName = "data", icon = icon("table"))
+        id = "tabs",
+        menuItem("Overview",  tabName = "overview", icon = icon("chart-line")),
+        menuItem("Geography", tabName = "geo",      icon = icon("map-location-dot")),
+        menuItem("Data",      tabName = "data",     icon = icon("table"))
     ),
     selectInput("year", "Year", choices = c(2024, 2025), selected = 2025),
     checkboxGroupInput("regions", "Regions",
@@ -276,14 +277,14 @@ server <- function(input, output, session) {
     d <- city_filtered()
     validate(need(nrow(d) > 0, "No cities for the selected regions."))
     
-    pal <- colorNumeric("Blues", domain = d$revenue)
+    pal <- colorNumeric("YlOrRd", domain = d$revenue)   # visible on a light basemap
     
     leaflet(d) |>
-      addProviderTiles(providers$CartoDB.Positron) |>
+      addTiles() |>
       addCircleMarkers(
         lng = ~lng, lat = ~lat,
         radius = ~scales::rescale(revenue, to = c(8, 28)),
-        color = "#ffffff", weight = 1,
+        color = "#333333", weight = 1.5,                 # dark outline
         fillColor = ~pal(revenue), fillOpacity = 0.85,
         label = ~city,
         popup = ~paste0("<b>", city, "</b><br>",
@@ -291,9 +292,19 @@ server <- function(input, output, session) {
                         "Revenue: $", format(revenue, big.mark = ","), "<br>",
                         "Stores: ", stores)
       ) |>
+      fitBounds(min(d$lng), min(d$lat), max(d$lng), max(d$lat)) |>
       addLegend("bottomright", pal = pal, values = ~revenue,
                 title = "Revenue ($)", opacity = 0.9)
   })
+  
+  # Re-fit once the Geography tab is actually visible
+  observeEvent(list(input$tabs, input$regions), {
+    req(input$tabs == "geo")
+    d <- city_filtered()
+    req(nrow(d) > 0)
+    leafletProxy("map") |>
+      fitBounds(min(d$lng), min(d$lat), max(d$lng), max(d$lat))
+  }, ignoreInit = TRUE)
   
   # ---------------------------- TABLE --------------------------
   output$table <- renderTable({
